@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>甘特圖生成器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.css">
+    <script src="https://cdn.jsdelivr.net/npm/frappe-gantt@0.6.1/dist/frappe-gantt.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Frappe Gantt 樣式微調 */
+        .gantt .bar-label { font-size: 12px; fill: #333; }
+        .gantt .bar-progress { fill: #a3a3a3; }
+        .gantt .bar { fill: #3b82f6; stroke: #1e40af; stroke-width: 0.5; rx: 3; ry: 3; }
+        .gantt .bar-invalid { fill: #ef4444; stroke: #b91c1c; }
+        .gantt .grid-header, .gantt .grid-row { fill: #f9fafb; }
+        .gantt .grid-row:nth-child(even) { fill: #f3f4f6; }
+        .gantt .tick { stroke: #e5e7eb; stroke-width: 0.5; }
+        .gantt .today-highlight { fill: #fef9c3; opacity: 0.5; }
+
+        /* --- 修正預覽區域樣式 --- */
+        #gantt-chart-container {
+            /* 移除固定的最小高度，讓它可以根據內容縮放 */
+            /* min-height: 300px; */
+            overflow: auto; /* 如果內容超出容器，顯示滾動條 (水平和垂直) */
+            position: relative; /* 確保 tooltip 定位相對此容器 */
+        }
+
+        /* 確保 SVG 可以擴展 */
+        #gantt-chart-container svg {
+             display: block;
+             /* 移除 width: 100%; 允許 SVG 根據內容擴展 */
+             /* width: 100%; */
+             /* height: auto; - Frappe Gantt 會自行設定高度，移除此行 */
+             min-width: 600px; /* 設定最小寬度，避免在窄螢幕下過於壓縮 */
+             overflow: visible; /* 確保 SVG 內部內容不被裁剪 */
+        }
+
+        /* Tooltip 樣式 */
+        .gantt-container .popup-wrapper {
+             position: absolute; /* 相對於 gantt-container 定位 */
+             z-index: 10;
+             background: rgba(0, 0, 0, 0.8);
+             color: white;
+             padding: 8px 12px;
+             border-radius: 6px;
+             font-size: 12px;
+             white-space: nowrap;
+             pointer-events: none; /* 避免干擾滑鼠事件 */
+        }
+        /* 隱藏元素 */
+        .hidden { display: none; }
+    </style>
+</head>
+<body class="bg-gray-100 p-4 md:p-8">
+    <div class="max-w-6xl mx-auto bg-white p-6 md:p-8 rounded-lg shadow-md">
+        <h1 class="text-2xl md:text-3xl font-bold mb-6 text-center text-gray-800">甘特圖生成器</h1>
+
+        <div id="message-box" class="mb-4 p-4 rounded-md text-sm hidden"></div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+            <div>
+                <h2 class="text-lg font-semibold mb-2 text-gray-700">1. 上傳 CSV 檔案</h2>
+                <p class="text-sm text-gray-500 mb-2">
+                    請上傳 CSV 檔案。第一列應為標頭。
+                </p>
+                <input type="file" id="csv-file-input" accept=".csv" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            <div>
+                <h2 class="text-lg font-semibold mb-2 text-gray-700">或者 2. 貼上表格資料</h2>
+                 <p class="text-sm text-gray-500 mb-2">
+                    請貼上逗號分隔的資料。第一列應為標頭。
+                </p>
+                <textarea id="paste-data-area" rows="5" placeholder="專案ID,任務描述,開始日期,結束日期,前置任務ID&#10;P1,規劃階段,2025-05-01,2025-05-10,&#10;P2,設計階段,2025-05-05,2025-05-15,P1&#10;P3,開發階段,2025-05-12,2025-05-25,P1,P2" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"></textarea>
+            </div>
+        </div>
+         <div class="text-center mb-6">
+             <button id="load-data-btn" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-6 rounded-md transition duration-150 ease-in-out">
+                 載入資料並設定欄位
+             </button>
+         </div>
+
+
+        <div id="mapping-section" class="mb-6 p-4 border border-gray-200 rounded-md bg-gray-50 hidden">
+            <h2 class="text-lg font-semibold mb-4 text-gray-700">3. 設定欄位對應</h2>
+            <p class="text-sm text-gray-500 mb-4">請選擇您的資料欄位對應到甘特圖所需的欄位。</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                <div>
+                    <label for="map-id" class="block text-sm font-medium text-gray-700 mb-1">任務 ID (必要)</label>
+                    <select id="map-id" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"></select>
+                </div>
+                <div>
+                    <label for="map-name" class="block text-sm font-medium text-gray-700 mb-1">任務名稱 (必要)</label>
+                    <select id="map-name" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"></select>
+                </div>
+                <div>
+                    <label for="map-start" class="block text-sm font-medium text-gray-700 mb-1">開始日期 (必要, YYYY-MM-DD)</label>
+                    <select id="map-start" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"></select>
+                </div>
+                <div>
+                    <label for="map-end" class="block text-sm font-medium text-gray-700 mb-1">結束日期 (必要, YYYY-MM-DD)</label>
+                    <select id="map-end" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"></select>
+                </div>
+                <div>
+                    <label for="map-dependencies" class="block text-sm font-medium text-gray-700 mb-1">相依性 (選填, 逗號分隔 ID)</label>
+                    <select id="map-dependencies" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"></select>
+                </div>
+            </div>
+             <div class="text-center mt-6">
+                 <button id="generate-chart-btn" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-md transition duration-150 ease-in-out">
+                     確認對應並生成甘特圖
+                 </button>
+             </div>
+        </div>
+
+        <div id="chart-section" class="hidden">
+            <h2 class="text-xl font-semibold mb-4 text-gray-700">甘特圖預覽</h2>
+            <div id="gantt-chart-container" class="border border-gray-200 rounded-md p-2 bg-white shadow-sm mb-4">
+                 <svg id="gantt-chart"></svg>
+                 <p id="gantt-placeholder" class="text-gray-400 text-center p-8">圖表將顯示於此。</p>
+            </div>
+
+            <div class="flex flex-col sm:flex-row justify-center items-center space-y-2 sm:space-y-0 sm:space-x-2">
+                 <button id="view-day-btn" class="text-sm bg-gray-200 hover:bg-gray-300 text-gray-700 py-1 px-3 rounded-md w-full sm:w-auto">日視圖</button>
+                 <button id="view-week-btn" class="text-sm bg-gray-200 hover:bg-gray-300 text-gray-700 py-1 px-3 rounded-md w-full sm:w-auto">週視圖</button>
+                 <button id="view-month-btn" class="text-sm bg-gray-200 hover:bg-gray-300 text-gray-700 py-1 px-3 rounded-md w-full sm:w-auto">月視圖</button>
+                 <button id="export-csv-btn" class="text-sm bg-green-600 hover:bg-green-700 text-white font-semibold py-1 px-4 rounded-md w-full sm:w-auto">
+                     匯出修改後的 CSV
+                 </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const csvFileInput = document.getElementById('csv-file-input');
+        const pasteDataArea = document.getElementById('paste-data-area');
+        const loadDataBtn = document.getElementById('load-data-btn');
+        const mappingSection = document.getElementById('mapping-section');
+        const generateChartBtn = document.getElementById('generate-chart-btn');
+        const chartSection = document.getElementById('chart-section');
+        const ganttChartContainer = document.getElementById('gantt-chart-container');
+        const ganttChartSvg = document.getElementById('gantt-chart');
+        const ganttPlaceholder = document.getElementById('gantt-placeholder');
+        const messageBox = document.getElementById('message-box');
+        const viewDayBtn = document.getElementById('view-day-btn');
+        const viewWeekBtn = document.getElementById('view-week-btn');
+        const viewMonthBtn = document.getElementById('view-month-btn');
+        const exportCsvBtn = document.getElementById('export-csv-btn');
+        const mapIdSelect = document.getElementById('map-id');
+        const mapNameSelect = document.getElementById('map-name');
+        const mapStartSelect = document.getElementById('map-start');
+        const mapEndSelect = document.getElementById('map-end');
+        const mapDependenciesSelect = document.getElementById('map-dependencies');
+
+        // State Variables
+        let ganttInstance = null;
+        let currentTasks = []; // Stores formatted tasks for Gantt and export
+        let rawData = []; // Stores raw parsed data (array of objects)
+        let rawHeaders = []; // Stores detected headers
+        let sourceDataString = ''; // Stores the original string data (from file or textarea)
+
+        // --- Helper Functions ---
+
+        function showMessage(message, isError = false) {
+            messageBox.textContent = message;
+            messageBox.className = `mb-4 p-4 rounded-md text-sm ${isError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`;
+            messageBox.classList.remove('hidden');
+            setTimeout(() => messageBox.classList.add('hidden'), 5000);
+        }
+
+        function hideMessage() {
+            messageBox.classList.add('hidden');
+        }
+
+        function isValidDate(dateString) {
+            if (!dateString) return false;
+            const regEx = /^\d{4}-\d{2}-\d{2}$/;
+            if (!dateString.match(regEx)) return false;
+            const d = new Date(dateString);
+            const dNum = d.getTime();
+            if (!dNum && dNum !== 0) return false;
+            return d.toISOString().slice(0, 10) === dateString;
+        }
+
+        // Populate mapping dropdowns with detected headers
+        function populateMappingDropdowns(headers) {
+            const selects = [mapIdSelect, mapNameSelect, mapStartSelect, mapEndSelect, mapDependenciesSelect];
+            selects.forEach(select => {
+                select.innerHTML = '<option value="">-- 請選擇 --</option>'; // Default option
+                 // Add special option for optional Dependencies field
+                if (select === mapDependenciesSelect) {
+                     select.innerHTML += '<option value="__skip__">(無/忽略此欄位)</option>';
+                }
+                headers.forEach(header => {
+                    const option = document.createElement('option');
+                    option.value = header;
+                    option.textContent = header;
+                    select.appendChild(option);
+                });
+            });
+             // Try to auto-select based on common names (case-insensitive)
+            const autoSelect = (select, keywords) => {
+                const lowerCaseKeywords = keywords.map(k => k.toLowerCase());
+                for (let i = 0; i < select.options.length; i++) {
+                    const optionValueLower = select.options[i].value.toLowerCase();
+                    if (lowerCaseKeywords.some(keyword => optionValueLower.includes(keyword))) {
+                        select.selectedIndex = i;
+                        break;
+                    }
+                }
+            };
+            autoSelect(mapIdSelect, ['id', '編號', '代碼']);
+            autoSelect(mapNameSelect, ['name', 'task', '任務', '名稱', '描述']);
+            autoSelect(mapStartSelect, ['start', '開始']);
+            autoSelect(mapEndSelect, ['end', '結束']);
+            autoSelect(mapDependenciesSelect, ['dependencies', '相依', '前置']);
+
+        }
+
+        // Get mapping configuration from dropdowns
+        function getMappingConfig() {
+             const config = {
+                 id: mapIdSelect.value,
+                 name: mapNameSelect.value,
+                 start: mapStartSelect.value,
+                 end: mapEndSelect.value,
+                 dependencies: mapDependenciesSelect.value === '__skip__' ? null : mapDependenciesSelect.value
+             };
+             // Basic validation
+             if (!config.id || !config.name || !config.start || !config.end) {
+                 throw new Error("請為所有必要欄位 (ID, 名稱, 開始日期, 結束日期) 選擇對應的資料欄位。");
+             }
+             return config;
+        }
+
+
+        // Parse raw data using the mapping configuration
+        function parseAndFormatData(data, mapping) {
+             // Input 'data' should be the array of objects from PapaParse
+            const tasks = data.map((row, index) => {
+                // Ensure values are treated as strings before trimming
+                const taskIdValue = row[mapping.id];
+                const taskNameValue = row[mapping.name];
+                const startDateValue = row[mapping.start];
+                const endDateValue = row[mapping.end];
+                const dependenciesValue = mapping.dependencies ? row[mapping.dependencies] : null;
+
+                const taskId = taskIdValue != null ? String(taskIdValue).trim() : `task_${index + 1}`;
+                const taskName = taskNameValue != null ? String(taskNameValue).trim() : `未命名任務 ${index + 1}`;
+                const startDate = startDateValue != null ? String(startDateValue).trim() : null;
+                const endDate = endDateValue != null ? String(endDateValue).trim() : null;
+                const dependencies = dependenciesValue != null ? String(dependenciesValue).trim() : '';
+
+
+                // Validate dates
+                if (!isValidDate(startDate)) {
+                    console.warn(`任務 "${taskName}" (ID: ${taskId}) 的開始日期格式無效或缺失: ${startDate}。將忽略此任務。`);
+                    return null;
+                }
+                if (!isValidDate(endDate)) {
+                    console.warn(`任務 "${taskName}" (ID: ${taskId}) 的結束日期格式無效或缺失: ${endDate}。將忽略此任務。`);
+                    return null;
+                }
+                if (new Date(endDate) < new Date(startDate)) {
+                     console.warn(`任務 "${taskName}" (ID: ${taskId}) 的結束日期 (${endDate}) 早於開始日期 (${startDate})。將忽略此任務。`);
+                     return null;
+                }
+
+                return {
+                    id: taskId,
+                    name: taskName,
+                    start: startDate,
+                    end: endDate,
+                    progress: 0, // Default progress
+                    dependencies: dependencies
+                };
+            }).filter(task => task !== null); // Filter out invalid tasks
+
+             if (tasks.length === 0 && data.length > 0) {
+                 throw new Error("所有任務的日期格式均無效、缺失或結束日期早於開始日期。請檢查您的資料和欄位對應。");
+             } else if (tasks.length === 0) {
+                 throw new Error("未找到有效的任務資料。請檢查您的資料和欄位對應。");
+             }
+
+             // Check for duplicate IDs
+            const ids = tasks.map(t => t.id);
+            const duplicateIds = ids.filter((id, index) => ids.indexOf(id) !== index);
+            if (duplicateIds.length > 0) {
+                 // Use Set to get unique duplicate IDs for the warning message
+                 const uniqueDuplicateIds = [...new Set(duplicateIds)];
+                 console.warn(`發現重複的任務 ID: ${uniqueDuplicateIds.join(', ')}。這可能導致相依性錯誤或顯示不正確。`);
+                 // Optionally throw an error or just warn
+                 // throw new Error(`發現重複的任務 ID: ${uniqueDuplicateIds.join(', ')}。請確保所有任務 ID 都是唯一的。`);
+            }
+
+
+            return tasks;
+        }
+
+        // Render the Gantt chart
+        function renderGanttChart(tasks) {
+            try {
+                 // Clear previous chart/placeholder
+                 ganttChartSvg.innerHTML = '';
+                 ganttPlaceholder.classList.add('hidden');
+                 chartSection.classList.remove('hidden'); // Show chart section
+
+                 // Destroy old instance if exists
+                 if (ganttInstance) {
+                     // Frappe Gantt doesn't have a formal destroy method,
+                     // clearing the container is usually sufficient.
+                     ganttInstance = null;
+                 }
+
+
+                 ganttInstance = new Gantt("#gantt-chart", tasks, {
+                     header_height: 50,
+                     column_width: 30,
+                     step: 24,
+                     view_modes: ['Day', 'Week', 'Month'],
+                     bar_height: 20,
+                     bar_corner_radius: 3,
+                     arrow_curve: 5, // Controls the curve of the dependency line
+                     padding: 18,
+                     view_mode: 'Week',
+                     date_format: 'YYYY-MM-DD',
+                     language: 'zh', // Set language if available in Frappe Gantt
+                     custom_popup_html: function(task) {
+                         // Format dates for display
+                         const start_date = new Date(task._start).toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' });
+                         const end_date = new Date(task._end).toLocaleDateString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit' });
+                         return `
+                         <div class="gantt-container"> <div class="popup-wrapper">
+                               <strong>${task.name}</strong><br/>
+                               期間: ${start_date} - ${end_date}
+                               ${task.dependencies ? `<br/>依賴: ${task.dependencies}` : ''}
+                             </div>
+                         </div>
+                       `;
+                     },
+                     on_click: (task) => {
+                         console.log("點擊了任務:", task);
+                         // You could add functionality here, like highlighting dependencies
+                     },
+                     // --- IMPORTANT: Update currentTasks on date change ---
+                     on_date_change: (task, start, end) => {
+                         console.log("日期變更 (拖曳):", task.id, start, end);
+                          // Find the task in currentTasks and update its dates
+                          const taskIndex = currentTasks.findIndex(t => t.id === task.id);
+                          if (taskIndex !== -1) {
+                               // Format dates back to YYYY-MM-DD string for consistency
+                               const startDateStr = start.toISOString().slice(0, 10);
+                               const endDateStr = end.toISOString().slice(0, 10);
+
+                               // Basic validation: Ensure end date is not before start date after drag
+                               if (new Date(endDateStr) < new Date(startDateStr)) {
+                                   console.warn(`拖曳調整後，任務 "${task.name}" 的結束日期早於開始日期。正在還原...`);
+                                   // Re-render to revert the change visually (Frappe Gantt might handle this, but good to be safe)
+                                   ganttInstance.refresh(currentTasks);
+                                   showMessage(`調整無效：結束日期不能早於開始日期。`, true);
+                                   return; // Stop further processing
+                               }
+
+
+                               currentTasks[taskIndex].start = startDateStr;
+                               currentTasks[taskIndex].end = endDateStr;
+                               console.log("Updated currentTasks:", currentTasks[taskIndex]);
+
+                               // Optionally, re-render or refresh to update dependencies if needed
+                               // ganttInstance.refresh(currentTasks); // Uncomment if dependencies need recalculation visually
+
+                               showMessage("任務時間已更新。點擊 '匯出 CSV' 可保存變更。", false);
+                          } else {
+                               console.error("無法在 currentTasks 中找到要更新的任務:", task.id);
+                          }
+                     },
+                     on_progress_change: (task, progress) => {
+                         console.log("進度變更 (未處理):", task.id, progress);
+                          // If progress needs to be saved, update currentTasks here too
+                          const taskIndex = currentTasks.findIndex(t => t.id === task.id);
+                          if (taskIndex !== -1) {
+                               // Ensure progress is a number between 0 and 100
+                               const validProgress = Math.max(0, Math.min(100, Number(progress)));
+                               currentTasks[taskIndex].progress = validProgress;
+                                console.log("Updated currentTasks progress:", currentTasks[taskIndex]);
+                                // Note: Progress isn't currently exported to CSV, add if needed
+                          }
+                     },
+                     on_view_change: (mode) => {
+                         console.log("視圖變更:", mode);
+                     }
+                 });
+
+                 // Ensure SVG responsiveness after rendering
+                 const svgElement = ganttChartContainer.querySelector('svg');
+                 if (svgElement) {
+                     // Let Frappe Gantt control the height based on content
+                     // svgElement.style.height = 'auto'; // Removed
+
+                     // *** REMOVED: Do not restrict max width, allow overflow ***
+                     // svgElement.style.maxWidth = '100%';
+
+                     // Set a minimum width for better readability on small screens,
+                     // combined with overflow: auto on the container for scrolling.
+                     svgElement.style.minWidth = '600px';
+                 }
+
+            } catch (error) {
+                 console.error("渲染甘特圖時出錯:", error);
+                 showMessage(`渲染甘特圖失敗: ${error.message}`, true);
+                 ganttPlaceholder.textContent = `渲染甘特圖時出錯: ${error.message}`;
+                 ganttPlaceholder.classList.remove('hidden');
+                 chartSection.classList.add('hidden'); // Hide chart section on error
+                 ganttChartSvg.innerHTML = '';
+                 ganttInstance = null;
+            }
+        }
+
+        // Convert task data to CSV string
+        function convertTasksToCsv(tasks) {
+            // Use the original headers if available, otherwise define standard ones
+             const headersToUse = rawHeaders.length > 0 ? rawHeaders : ['ID', 'Task Name', 'Start Date', 'End Date', 'Dependencies'];
+             // Find the keys corresponding to the standard fields based on current mapping
+             let mappingConfig;
+             try {
+                 mappingConfig = getMappingConfig();
+             } catch (e) {
+                 console.warn("無法獲取欄位對應設定，將使用標準欄位名稱匯出。");
+                 mappingConfig = { id: 'ID', name: 'Task Name', start: 'Start Date', end: 'End Date', dependencies: 'Dependencies' };
+             }
+
+             // Create an object to map standard fields back to original headers (if possible)
+             const reverseMapping = {
+                 'ID': headersToUse.find(h => h === mappingConfig.id) || 'ID',
+                 'Task Name': headersToUse.find(h => h === mappingConfig.name) || 'Task Name',
+                 'Start Date': headersToUse.find(h => h === mappingConfig.start) || 'Start Date',
+                 'End Date': headersToUse.find(h => h === mappingConfig.end) || 'End Date',
+                 'Dependencies': headersToUse.find(h => h === mappingConfig.dependencies) || (mappingConfig.dependencies ? 'Dependencies' : null) // Handle skipped dependencies
+             };
+
+
+            const dataToUnparse = tasks.map(task => {
+                 const row = {};
+                 row[reverseMapping['ID']] = task.id;
+                 row[reverseMapping['Task Name']] = task.name;
+                 row[reverseMapping['Start Date']] = task.start;
+                 row[reverseMapping['End Date']] = task.end;
+                 if (reverseMapping['Dependencies']) { // Only add dependency column if it was mapped
+                     row[reverseMapping['Dependencies']] = task.dependencies || '';
+                 }
+                 // Add other original columns back if needed (requires storing rawData with mapping)
+                 // This part is complex if columns were added/removed/reordered.
+                 // For simplicity, we only export the core Gantt fields using original headers if possible.
+                 return row;
+            });
+
+             // Define the exact headers for the output CSV in the desired order
+             const outputHeaders = [
+                 reverseMapping['ID'],
+                 reverseMapping['Task Name'],
+                 reverseMapping['Start Date'],
+                 reverseMapping['End Date']
+             ];
+             if (reverseMapping['Dependencies']) {
+                 outputHeaders.push(reverseMapping['Dependencies']);
+             }
+
+
+            try {
+                 return Papa.unparse(dataToUnparse, {
+                     header: true,
+                     columns: outputHeaders // Use the determined headers for output order
+                 });
+            } catch(e) {
+                 console.error("轉換為 CSV 時出錯:", e);
+                 showMessage("將資料轉換為 CSV 時出錯。", true);
+                 return null;
+            }
+        }
+
+        // Trigger CSV download
+        function downloadCsv(csvString, filename = 'gantt_data_modified.csv') {
+            if (!csvString) return;
+            // Add BOM for Excel compatibility with UTF-8 characters
+            const blob = new Blob(["\uFEFF" + csvString], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            if (link.download !== undefined) { // Feature detection
+                const url = URL.createObjectURL(blob);
+                link.setAttribute('href', url);
+                link.setAttribute('download', filename);
+                link.style.visibility = 'hidden';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url); // Clean up
+            } else {
+                 showMessage("您的瀏覽器不支援自動下載。");
+            }
+        }
+
+
+        // --- Event Listeners ---
+
+        // Load Data Button (Step 1 -> Step 2)
+        loadDataBtn.addEventListener('click', () => {
+            hideMessage();
+            const file = csvFileInput.files[0];
+            const pastedData = pasteDataArea.value.trim();
+            sourceDataString = ''; // Reset source data string
+            rawHeaders = []; // Reset headers
+            rawData = []; // Reset raw data
+
+            const processDataString = (dataStr) => {
+                 sourceDataString = dataStr;
+                 // Parse only headers first
+                 Papa.parse(sourceDataString, {
+                     preview: 1, // Only parse the first row
+                     skipEmptyLines: true,
+                     complete: (results) => {
+                         if (results.data && results.data.length > 0 && results.data[0].length > 0) {
+                             rawHeaders = results.data[0];
+                             // Basic check for completely empty header row
+                             if (rawHeaders.every(h => h === null || String(h).trim() === '')) {
+                                  showMessage("偵測到空的標頭列。請確保 CSV 第一列包含有效的欄位名稱。", true);
+                                  mappingSection.classList.add('hidden');
+                                  return;
+                             }
+                             populateMappingDropdowns(rawHeaders);
+                             mappingSection.classList.remove('hidden');
+                             chartSection.classList.add('hidden'); // Hide chart if previously shown
+                             ganttInstance = null; // Reset instance
+                             showMessage("資料已載入，請設定欄位對應。", false);
+                         } else {
+                             showMessage("無法讀取標頭。請檢查資料來源是否為有效的 CSV 格式且包含標頭列。", true);
+                             mappingSection.classList.add('hidden');
+                         }
+                     },
+                     error: (error) => {
+                          showMessage(`讀取標頭時出錯: ${error.message}`, true);
+                          mappingSection.classList.add('hidden');
+                     }
+                 });
+            };
+
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    processDataString(event.target.result);
+                };
+                reader.onerror = () => {
+                    showMessage("讀取檔案失敗。", true);
+                     mappingSection.classList.add('hidden');
+                };
+                reader.readAsText(file); // Consider adding encoding selection if needed
+            } else if (pastedData) {
+                 processDataString(pastedData);
+            } else {
+                showMessage("請先上傳 CSV 檔案或貼上資料。", true);
+                 mappingSection.classList.add('hidden');
+            }
+             // Clear file input for re-upload
+             csvFileInput.value = '';
+        });
+
+
+        // Generate Chart Button (Step 2 -> Step 3)
+        generateChartBtn.addEventListener('click', () => {
+            hideMessage();
+            ganttPlaceholder.textContent = "處理中...";
+            ganttPlaceholder.classList.remove('hidden');
+            chartSection.classList.add('hidden'); // Hide chart section initially
+            ganttChartSvg.innerHTML = ''; // Clear old svg content
+            ganttInstance = null; // Reset instance
+            rawData = []; // Reset raw data
+            currentTasks = []; // Reset tasks
+
+            try {
+                const mappingConfig = getMappingConfig(); // Validate and get mapping
+
+                // Parse the full data string using PapaParse with headers=true
+                Papa.parse(sourceDataString, {
+                    header: true, // Use the first row as headers
+                    skipEmptyLines: true,
+                    dynamicTyping: false, // Treat all values as strings initially
+                    complete: (results) => {
+                         if (results.errors.length > 0) {
+                             console.error("CSV 解析錯誤:", results.errors);
+                             // Provide more specific error messages
+                             const errorMessages = results.errors.map(e => `行 ${e.row + 1}: ${e.message}`).join('; ');
+                             throw new Error(`CSV 解析錯誤: ${errorMessages}`);
+                         }
+                         if (!results.data || results.data.length === 0) {
+                             throw new Error("未解析到任何資料行 (標頭列之後)。");
+                         }
+
+                         rawData = results.data; // Store raw parsed objects
+                         currentTasks = parseAndFormatData(rawData, mappingConfig); // Format using mapping
+                         renderGanttChart(currentTasks); // Render the chart
+                         showMessage("甘特圖已成功生成！", false);
+                    },
+                    error: (error) => {
+                         console.error("PapaParse 錯誤:", error);
+                         throw new Error(`CSV 解析失敗: ${error.message}`);
+                    }
+                });
+
+            } catch (error) {
+                showMessage(`生成圖表時出錯: ${error.message}`, true);
+                ganttPlaceholder.textContent = `生成圖表時出錯: ${error.message}`;
+                ganttPlaceholder.classList.remove('hidden');
+                 chartSection.classList.add('hidden'); // Keep chart section hidden on error
+                console.error("生成圖表錯誤:", error);
+            }
+        });
+
+
+        // Export CSV Button
+        exportCsvBtn.addEventListener('click', () => {
+            if (!currentTasks || currentTasks.length === 0) {
+                showMessage("沒有可匯出的資料。", true);
+                return;
+            }
+            try {
+                const csvOutput = convertTasksToCsv(currentTasks);
+                if (csvOutput) {
+                    downloadCsv(csvOutput, 'gantt_data_updated.csv');
+                    showMessage("CSV 檔案已開始下載。", false);
+                }
+            } catch (error) {
+                 showMessage(`匯出 CSV 時發生錯誤: ${error.message}`, true);
+                 console.error("匯出錯誤:", error);
+            }
+        });
+
+        // View Mode Buttons
+        viewDayBtn.addEventListener('click', () => ganttInstance?.change_view_mode('Day'));
+        viewWeekBtn.addEventListener('click', () => ganttInstance?.change_view_mode('Week'));
+        viewMonthBtn.addEventListener('click', () => ganttInstance?.change_view_mode('Month'));
+
+        // Window Resize Handler (Debounced)
+         let resizeTimer;
+         window.addEventListener('resize', () => {
+             if (ganttInstance && currentTasks.length > 0) {
+                 clearTimeout(resizeTimer);
+                 resizeTimer = setTimeout(() => {
+                     console.log("Window resized, re-rendering Gantt chart...");
+                     // Re-render with current tasks to adjust layout
+                     // Preserve current view mode
+                     const currentViewMode = ganttInstance.options.view_mode;
+                     renderGanttChart(currentTasks);
+                     if(ganttInstance) {
+                         ganttInstance.change_view_mode(currentViewMode);
+                     }
+                 }, 250); // Debounce resize event
+             }
+         });
+
+    </script>
+</body>
+</html>
