@@ -15,23 +15,25 @@
         body {
             font-family: 'Inter', sans-serif;
         }
-        /* Frappe Gantt 樣式微調 */
-        .gantt .bar-invalid { fill: #ef4444; stroke: #b91c1c; }
-        .gantt .grid-header, .gantt .grid-row { fill: #f9fafb; }
-        .gantt .grid-row:nth-child(even) { fill: #f3f4f6; }
-        .gantt .tick { stroke: #e5e7eb; stroke-width: 0.5; }
-        .gantt .today-highlight { fill: #fef9c3; opacity: 0.5; }
+        /* Frappe Gantt 樣式微調 - 增強對比度 */
+        .gantt .bar-invalid { fill: #dc2626; stroke: #991b1b; }
+        .gantt .grid-header, .gantt .grid-row { fill: #ffffff; }
+        .gantt .grid-row:nth-child(even) { fill: #f8fafc; }
+        .gantt .tick { stroke: #d1d5db; stroke-width: 1; }
+        .gantt .today-highlight { fill: #fbbf24; opacity: 0.3; }
 
-        /* --- NEW: 提升字體清晰度 --- */
+        /* --- 提升字體清晰度和對比度 --- */
         /* 加大甘特圖左側任務列表的字體 */
         .gantt .grid-row .row-text {
-            font-size: 14px;
-            font-weight: 500;
-            fill: #374151; /* 使用深灰色以增強對比 */
+            font-size: 15px;
+            font-weight: 600;
+            fill: #1f2937; /* 使用更深的灰色增強對比 */
         }
         /* 加大甘特圖上方標頭的字體 */
          .gantt .upper-text, .gantt .lower-text {
-            font-size: 12px;
+            font-size: 13px;
+            font-weight: 600;
+            fill: #111827; /* 深色文字增強可讀性 */
         }
 
 
@@ -47,43 +49,45 @@
              overflow: visible;
         }
 
-        /* Tooltip 樣式 */
+        /* Tooltip 樣式 - 增強對比度 */
         .gantt-container .popup-wrapper {
              position: absolute;
              z-index: 10;
-             background: rgba(0, 0, 0, 0.85);
-             color: white;
-             padding: 10px 15px;
+             background: rgba(17, 24, 39, 0.95); /* 更深的背景色 */
+             color: #ffffff;
+             padding: 12px 16px;
              border-radius: 8px;
-             font-size: 14px; /* 稍大字體讓 tooltip 更易讀 */
+             font-size: 15px; /* 稍大字體讓 tooltip 更易讀 */
+             font-weight: 500;
              white-space: nowrap;
              pointer-events: none;
-             box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+             box-shadow: 0 6px 16px rgba(0,0,0,0.3);
+             border: 1px solid rgba(255,255,255,0.1);
         }
         /* 隱藏元素 */
         .hidden { display: none; }
     </style>
 </head>
-<body class="bg-gray-100 p-4 md:p-8">
-    <div class="max-w-6xl mx-auto bg-white p-6 md:p-8 rounded-lg shadow-md">
-        <h1 class="text-2xl md:text-3xl font-bold mb-6 text-center text-gray-800">甘特圖生成器</h1>
+<body class="bg-gray-50 p-4 md:p-8">
+    <div class="max-w-6xl mx-auto bg-white p-6 md:p-8 rounded-lg shadow-lg border border-gray-200">
+        <h1 class="text-2xl md:text-3xl font-bold mb-6 text-center text-gray-900">甘特圖生成器</h1>
 
         <div id="message-box" class="mb-4 p-4 rounded-md text-sm hidden"></div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
             <div>
-                <h2 class="text-lg font-semibold mb-2 text-gray-700">1. 上傳 CSV 檔案</h2>
-                <p class="text-sm text-gray-500 mb-2">
+                <h2 class="text-lg font-semibold mb-2 text-gray-800">1. 上傳 CSV 檔案</h2>
+                <p class="text-sm text-gray-600 mb-2">
                     請上傳 CSV 檔案。第一列應為標頭。
                 </p>
-                <input type="file" id="csv-file-input" accept=".csv" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <input type="file" id="csv-file-input" accept=".csv" class="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 border border-gray-300 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
             </div>
             <div>
-                <h2 class="text-lg font-semibold mb-2 text-gray-700">或者 2. 貼上表格資料</h2>
-                 <p class="text-sm text-gray-500 mb-2">
+                <h2 class="text-lg font-semibold mb-2 text-gray-800">或者 2. 貼上表格資料</h2>
+                 <p class="text-sm text-gray-600 mb-2">
                     請貼上逗號分隔的資料。第一列應為標頭。
                 </p>
-                <textarea id="paste-data-area" rows="5" placeholder="專案ID,任務描述,開始日期,結束日期,前置任務ID&#10;P1,規劃階段,2025-05-01,2025-05-10,&#10;P2,設計階段,2025-05-05,2025-05-15,P1&#10;P3,開發階段,2025-05-12,2025-05-25,P1,P2" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"></textarea>
+                <textarea id="paste-data-area" rows="5" placeholder="專案ID,任務描述,開始日期,結束日期,前置任務ID&#10;P1,規劃階段,2025-05-01,2025-05-10,&#10;P2,設計階段,2025-05-05,2025-05-15,P1&#10;P3,開發階段,2025-05-12,2025-05-25,P1,P2" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-800"></textarea>
             </div>
         </div>
          <div class="text-center mb-6">
@@ -93,29 +97,29 @@
          </div>
 
 
-        <div id="mapping-section" class="mb-6 p-4 border border-gray-200 rounded-md bg-gray-50 hidden">
-            <h2 class="text-lg font-semibold mb-4 text-gray-700">3. 設定欄位對應</h2>
-            <p class="text-sm text-gray-500 mb-4">請選擇您的資料欄位對應到甘特圖所需的欄位。</p>
+        <div id="mapping-section" class="mb-6 p-4 border border-gray-300 rounded-md bg-gray-50 hidden">
+            <h2 class="text-lg font-semibold mb-4 text-gray-800">3. 設定欄位對應</h2>
+            <p class="text-sm text-gray-600 mb-4">請選擇您的資料欄位對應到甘特圖所需的欄位。</p>
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 <div>
-                    <label for="map-id" class="block text-sm font-medium text-gray-700 mb-1">任務 ID (必要)</label>
-                    <select id="map-id" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"></select>
+                    <label for="map-id" class="block text-sm font-medium text-gray-800 mb-1">任務 ID (必要)</label>
+                    <select id="map-id" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-800"></select>
                 </div>
                 <div>
-                    <label for="map-name" class="block text-sm font-medium text-gray-700 mb-1">任務名稱 (必要)</label>
-                    <select id="map-name" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"></select>
+                    <label for="map-name" class="block text-sm font-medium text-gray-800 mb-1">任務名稱 (必要)</label>
+                    <select id="map-name" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-800"></select>
                 </div>
                 <div>
-                    <label for="map-start" class="block text-sm font-medium text-gray-700 mb-1">開始日期 (必要, YYYY-MM-DD)</label>
-                    <select id="map-start" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"></select>
+                    <label for="map-start" class="block text-sm font-medium text-gray-800 mb-1">開始日期 (必要, YYYY-MM-DD)</label>
+                    <select id="map-start" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-800"></select>
                 </div>
                 <div>
-                    <label for="map-end" class="block text-sm font-medium text-gray-700 mb-1">結束日期 (必要, YYYY-MM-DD)</label>
-                    <select id="map-end" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"></select>
+                    <label for="map-end" class="block text-sm font-medium text-gray-800 mb-1">結束日期 (必要, YYYY-MM-DD)</label>
+                    <select id="map-end" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-800"></select>
                 </div>
                 <div>
-                    <label for="map-dependencies" class="block text-sm font-medium text-gray-700 mb-1">相依性 (選填, 逗號分隔 ID)</label>
-                    <select id="map-dependencies" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"></select>
+                    <label for="map-dependencies" class="block text-sm font-medium text-gray-800 mb-1">相依性 (選填, 逗號分隔 ID)</label>
+                    <select id="map-dependencies" class="w-full p-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm bg-white text-gray-800"></select>
                 </div>
             </div>
              <div class="text-center mt-6">
@@ -126,16 +130,16 @@
         </div>
 
         <div id="chart-section" class="hidden">
-            <h2 class="text-xl font-semibold mb-4 text-gray-700">甘特圖預覽</h2>
-            <div id="gantt-chart-container" class="border border-gray-200 rounded-md p-2 bg-white shadow-sm mb-4">
+            <h2 class="text-xl font-semibold mb-4 text-gray-800">甘特圖預覽</h2>
+            <div id="gantt-chart-container" class="border border-gray-300 rounded-md p-3 bg-white shadow-md mb-4">
                  <svg id="gantt-chart"></svg>
-                 <p id="gantt-placeholder" class="text-gray-400 text-center p-8">圖表將顯示於此。</p>
+                 <p id="gantt-placeholder" class="text-gray-500 text-center p-8 font-medium">圖表將顯示於此。</p>
             </div>
 
             <div class="flex flex-col sm:flex-row justify-center items-center space-y-2 sm:space-y-0 sm:space-x-2">
-                 <button id="view-day-btn" class="text-sm bg-gray-200 hover:bg-gray-300 text-gray-700 py-1 px-3 rounded-md w-full sm:w-auto">日視圖</button>
-                 <button id="view-week-btn" class="text-sm bg-gray-200 hover:bg-gray-300 text-gray-700 py-1 px-3 rounded-md w-full sm:w-auto">週視圖</button>
-                 <button id="view-month-btn" class="text-sm bg-gray-200 hover:bg-gray-300 text-gray-700 py-1 px-3 rounded-md w-full sm:w-auto">月視圖</button>
+                 <button id="view-day-btn" class="text-sm bg-gray-300 hover:bg-gray-400 text-gray-800 font-medium py-1 px-3 rounded-md w-full sm:w-auto">日視圖</button>
+                 <button id="view-week-btn" class="text-sm bg-gray-300 hover:bg-gray-400 text-gray-800 font-medium py-1 px-3 rounded-md w-full sm:w-auto">週視圖</button>
+                 <button id="view-month-btn" class="text-sm bg-gray-300 hover:bg-gray-400 text-gray-800 font-medium py-1 px-3 rounded-md w-full sm:w-auto">月視圖</button>
                  <button id="export-csv-btn" class="text-sm bg-green-600 hover:bg-green-700 text-white font-semibold py-1 px-4 rounded-md w-full sm:w-auto">
                      匯出修改後的 CSV
                  </button>
